@@ -15,7 +15,7 @@ from utils import (
 
 
 def generate_stac_collection(
-    min_lat, min_lon, max_lat, max_lon, earliest_time, latest_time
+    min_lat, min_lon, max_lat, max_lon, earliest_time, latest_time, collection_link
 ):
     earliest_time = pytz.utc.localize(earliest_time)
     latest_time = pytz.utc.localize(latest_time)
@@ -32,6 +32,7 @@ def generate_stac_collection(
         title=collection_title,
         description=collection_description,
         extent=collection_extent,
+        href=collection_link,
     )
     return collection
 
@@ -99,6 +100,8 @@ def activities_to_stac_catalog(
     latest_time = datetime.min
 
     for _, row in activities_df.iterrows():
+        if generated_files_count == 10:
+                break
         try:
             file_name = row["Filename"].split("/")[-1]
         except AttributeError:
@@ -140,11 +143,12 @@ def activities_to_stac_catalog(
             with open(stac_item_path, "w") as file:
                 json.dump(stac_item, file)
             generated_files_count += 1
+            
         else:
             print(f"File {file_path} does not exist!")
 
     collection = generate_stac_collection(
-        min_lat, min_lon, max_lat, max_lon, earliest_time, latest_time
+        min_lat, min_lon, max_lat, max_lon, earliest_time, latest_time, collection_link
     )
     with open(collection_link, "w") as file:
         json.dump(collection.to_dict(), file)
