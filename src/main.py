@@ -4,9 +4,7 @@ import argparse
 from stac_strava import activities_to_stac_catalog
 
 
-def updated_main(
-    strava_archive_path, destination_folder, collection_link, catalog_link
-):
+def main(strava_archive_path, destination_folder, collection_link, catalog_link):
     # Define paths based on the provided Strava archive path
     csv_path = os.path.join(strava_archive_path, "activities.csv")
     activities_folder = os.path.join(strava_archive_path, "activities")
@@ -34,7 +32,7 @@ if __name__ == "__main__":
     parser.add_argument("catalog_link", type=str, help="Link to the STAC catalog root")
     args = parser.parse_args()
 
-    updated_main(
+    main(
         args.strava_archive_path,
         args.destination_folder,
         args.collection_link,
