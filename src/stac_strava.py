@@ -1,10 +1,9 @@
 import os
-import json
-import dateparser
+
 import pytz
 from pathlib import Path
 from tqdm import tqdm
-
+import dateparser
 import pandas as pd
 import pystac
 
@@ -48,9 +47,11 @@ def activity_to_stac(
         key="data",
         asset=pystac.Asset(
             href=link_file,
-            media_type="application/xml" if file_type not in ["fit", "tcx"] else "application/octet-stream",
+            media_type="application/xml"
+            if file_type not in ["fit", "tcx"]
+            else "application/octet-stream",
             title=f"{file_type.upper()} Data",
-            roles=["data"]
+            roles=["data"],
         ),
     )
 

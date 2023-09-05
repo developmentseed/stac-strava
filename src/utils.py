@@ -1,4 +1,3 @@
-
 import gzip
 from xml.etree import ElementTree
 
@@ -53,7 +52,7 @@ def extract_coordinates_from_fit(fit_file_path):
                 coords.append([lon * (180 / 2**31), lat * (180 / 2**31)])
     except fitparse.utils.FitParseError:
         print(
-            f"Failed to parse FIT file: {fit_file_path}. It might be corrupted, or no coordinates where found."
+            f"Failed to parse FIT file: {fit_file_path}. It might be corrupted, or no coordinates were found."
         )
 
     return coords
