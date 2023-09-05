@@ -1,15 +1,8 @@
-import os
 import gzip
 from xml.etree import ElementTree
 
 from fitparse import FitFile
 import fitparse
-
-
-def ensure_directory_exists(directory_path):
-    """Ensure that a directory exists. If not, create it."""
-    if not os.path.exists(directory_path):
-        os.makedirs(directory_path)
 
 
 def extract_coordinates_from_gpx(gpx_content):
@@ -59,7 +52,7 @@ def extract_coordinates_from_fit(fit_file_path):
                 coords.append([lon * (180 / 2**31), lat * (180 / 2**31)])
     except fitparse.utils.FitParseError:
         print(
-            f"Failed to parse FIT file: {fit_file_path}. It might be corrupted, or no coordinates where found."
+            f"Failed to parse FIT file: {fit_file_path}. It might be corrupted, or no coordinates were found."
         )
 
     return coords
@@ -89,12 +82,3 @@ def unzip_folder(file_path, file_name):
     file_type = file_name.split(".")[-2]
 
     return file_path, file_type
-
-
-def update_spatial_bounds(coordinates, min_lat, min_lon, max_lat, max_lon):
-    for lon, lat in coordinates:
-        min_lat = min(min_lat, lat)
-        min_lon = min(min_lon, lon)
-        max_lat = max(max_lat, lat)
-        max_lon = max(max_lon, lon)
-    return min_lat, min_lon, max_lat, max_lon

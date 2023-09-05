@@ -1,140 +1,104 @@
 import os
-import json
-from datetime import datetime
+
 import pytz
 from pathlib import Path
-
+from tqdm import tqdm
+import dateparser
 import pandas as pd
-from pystac import Collection, Extent, SpatialExtent, TemporalExtent
+import pystac
 
-from utils import (
-    ensure_directory_exists,
-    extract_coordinates,
-    unzip_folder,
-    update_spatial_bounds,
-)
-
-
-def generate_stac_collection(
-    min_lat, min_lon, max_lat, max_lon, earliest_time, latest_time, collection_id
-):
-    earliest_time = pytz.utc.localize(earliest_time)
-    latest_time = pytz.utc.localize(latest_time)
-
-    collection_title = "Strava Activities"
-    collection_description = "This is a collection of Strava activities."
-    collection_extent = Extent(
-        SpatialExtent([[min_lon, min_lat, max_lon, max_lat]]),
-        TemporalExtent([[earliest_time, latest_time]]),
-    )
-    collection = Collection(
-        id=collection_id,
-        title=collection_title,
-        description=collection_description,
-        extent=collection_extent,
-        href=collection_id,
-    )
-    return collection
+from utils import extract_coordinates, unzip_folder
 
 
 def activity_to_stac(
     file_path,
     link_file,
-    collection_id,
-    catalog_link,
-    path_to_items,
+    collection,
     activity_data,
     file_type,
-    min_lat,
-    min_lon,
-    max_lat,
-    max_lon,
 ):
     # Extract coordinates from the file based on its type.
     coordinates = extract_coordinates(file_path, file_type)
-    min_lat, min_lon, max_lat, max_lon = update_spatial_bounds(
-        coordinates, min_lat, min_lon, max_lat, max_lon
+    try:
+        lon, lat = zip(*coordinates)
+        bbox = [min(lon), min(lat), max(lon), max(lat)]
+    except ValueError:
+        bbox = None
+
+    date_str = activity_data[1]
+    date_obj = dateparser.parse(date_str)
+    date_obj_utc = pytz.utc.localize(date_obj)
+    item_id = str(activity_data[0])
+
+    stac_item = pystac.Item(
+        id=item_id,
+        collection=collection,
+        geometry={"type": "LineString", "coordinates": coordinates},
+        datetime=date_obj_utc,
+        bbox=bbox,
+        properties={
+            "name": activity_data[2],
+            "type": activity_data[3],
+            "datetime": date_obj_utc,
+            "distance": activity_data[6],
+        },
+    )
+    stac_item.add_asset(
+        key="data",
+        asset=pystac.Asset(
+            href=link_file,
+            media_type="application/xml"
+            if file_type not in ["fit", "tcx"]
+            else "application/octet-stream",
+            title=f"{file_type.upper()} Data",
+            roles=["data"],
+        ),
     )
 
-    date_str = activity_data["Activity Date"]
-    date_obj = datetime.strptime(date_str, "%b %d, %Y, %I:%M:%S %p")
-    date_obj_utc = pytz.utc.localize(date_obj)
-    date_iso = date_obj_utc.isoformat()
-
-    item_id = str(activity_data["Activity ID"])
-    stac_item = {
-        "id": item_id,
-        "type": "Feature",
-        "stac_version": "1.0.0-beta.2",
-        "stac_extensions": [],
-        "collection": collection_id.split("/")[-1],
-        "geometry": {"type": "LineString", "coordinates": coordinates},
-        "properties": {
-            "name": activity_data["Activity Name"],
-            "type": activity_data["Activity Type"],
-            "datetime": date_iso,
-            "distance": activity_data["Distance"],
-        },
-        "assets": {
-            "data": {
-                "href": link_file,
-                "type": "application/xml"
-                if file_type not in ["fit", "tcx"]
-                else "application/octet-stream",
-                "title": f"{file_type.upper()} Data",
-            }
-        },
-        "links": [
-            {"rel": "self", "href": f"{path_to_items}{item_id}.json"},
-            {"rel": "collection", "href": collection_id},
-            {"rel": "root", "href": catalog_link},
-        ],
-    }
-    return stac_item, min_lat, min_lon, max_lat, max_lon
+    # Note: stac_item.validate() will fail at this stage because of missing links
+    # The links will be set automagically when we do `catalog.normalize_hrefs` later
+    return stac_item
 
 
 def activities_to_stac_catalog(
-    csv_path, activities_folder, destination_folder, collection_id, catalog_link
+    csv_path,
+    activities_folder,
+    destination_folder,
+    collection_id,
 ):
-    ensure_directory_exists(destination_folder)
+    catalog = pystac.Catalog(id="strava", description="Strava Activities")
+    collection = pystac.Collection(
+        id=collection_id,
+        title="Strava Activities",
+        description="This is a collection of Strava activities.",
+        extent=pystac.Extent(
+            spatial=None,
+            temporal=None,
+        ),
+    )
+    catalog.add_child(collection)
+
     activities_df = pd.read_csv(csv_path)
     generated_files_count = 0
 
-    min_lat, min_lon, max_lat, max_lon = 90, 180, -90, -180
-    earliest_time = datetime.max
-    latest_time = datetime.min
-
-    for _, row in activities_df.iterrows():
+    for _, row in tqdm(activities_df.iterrows(), total=activities_df.shape[0]):
         try:
-            file_name = row["Filename"].split("/")[-1]
-        except AttributeError:
+            file_name = row[12].split("/")[-1]
+        except (KeyError, AttributeError):
             continue
-
-        activity_datetime = datetime.strptime(
-            row["Activity Date"], "%b %d, %Y, %I:%M:%S %p"
-        )
-        earliest_time = min(earliest_time, activity_datetime)
-        latest_time = max(latest_time, activity_datetime)
 
         file_path = os.path.join(activities_folder, file_name)
         file_type = file_name.split(".")[-1]
-
         if file_type.endswith("gz"):
             file_path, file_type = unzip_folder(file_path, file_name)
 
         if os.path.exists(file_path):
-            stac_item, min_lat, min_lon, max_lat, max_lon = activity_to_stac(
+            stac_item = activity_to_stac(
                 file_path,
                 file_path,
-                collection_id,
-                catalog_link,
-                destination_folder,
+                collection,
                 row,
                 file_type,
-                min_lat,
-                min_lon,
-                max_lat,
-                max_lon,
             )
 
             # Check if the stac_item is None and if so, print the reason
@@ -142,23 +106,20 @@ def activities_to_stac_catalog(
                 print(f"Skipping {file_name} due to no coordinates extracted.")
                 continue
 
-            stac_item_path = os.path.join(destination_folder, f"{stac_item['id']}.json")
-            with open(stac_item_path, "w") as file:
-                json.dump(stac_item, file)
+            collection.add_item(stac_item)
+
             generated_files_count += 1
-            
+
         else:
             print(f"File {file_path} does not exist!")
 
-    collection = generate_stac_collection(
-        min_lat, min_lon, max_lat, max_lon, earliest_time, latest_time, collection_id
-    )
+    # Update Temporal and Spatial extent from all items
+    collection.update_extent_from_items()
 
-    
-    parent_path = Path(destination_folder).parent
-    collection_path = os.path.join(parent_path, f"{collection_id}.json")
-    print(collection_path)
-    with open(collection_path, "w+") as file:
-        json.dump(collection.to_dict(), file)
+    if not Path(destination_folder).is_dir():
+        Path(destination_folder).mkdir(parents=True)
+
+    catalog.normalize_hrefs(destination_folder)
+    catalog.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
 
     return generated_files_count

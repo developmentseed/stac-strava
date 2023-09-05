@@ -1,5 +1,6 @@
 geopy
-stac-validator
 pystac
 requests
 fitparse
+dateparser
+tqdm
