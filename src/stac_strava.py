@@ -49,6 +49,7 @@ def activities_to_stac(
     }
     return stac_item
 
+
 def activities_to_stac_catalog(
     csv_path, activities_folder, destination_folder, collection_link, catalog_link
 ):

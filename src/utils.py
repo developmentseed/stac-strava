@@ -5,6 +5,7 @@ from xml.etree import ElementTree
 from fitparse import FitFile
 import fitparse
 
+
 def ensure_directory_exists(directory_path):
     """Ensure that a directory exists. If not, create it."""
     if not os.path.exists(directory_path):
@@ -57,8 +58,10 @@ def extract_coordinates_from_fit(fit_file_path):
             if lat and lon:
                 coords.append([lon * (180 / 2**31), lat * (180 / 2**31)])
     except fitparse.utils.FitParseError:
-        print(f"Failed to parse FIT file: {fit_file_path}. It might be corrupted, or no coordinates where found.")
-    
+        print(
+            f"Failed to parse FIT file: {fit_file_path}. It might be corrupted, or no coordinates where found."
+        )
+
     return coords
 
 
@@ -76,13 +79,11 @@ def extract_coordinates(file_path, file_type):
         return extract_coordinates_from_fit(file_path)
     else:
         return []
-    
+
 
 def unzip_folder(file_path, file_name):
     decompressed_path = file_path.replace(".gz", "")
-    with gzip.open(file_path, "rb") as f_in, open(
-        decompressed_path, "wb"
-    ) as f_out:
+    with gzip.open(file_path, "rb") as f_in, open(decompressed_path, "wb") as f_out:
         f_out.writelines(f_in)
     file_path = decompressed_path
     file_type = file_name.split(".")[-2]
